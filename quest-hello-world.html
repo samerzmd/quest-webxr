@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Quest Hello World</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- A-Frame core -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+    <!-- Super-hands gives us grab/drag interactions out of the box -->
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-super-hands-component@4.0.3/dist/super-hands.min.js"></script>
+    <!-- Physics + extras that super-hands builds on -->
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/physx@v0.2.0/dist/physx.min.js"></script>
+  </head>
+
+  <body>
+    <a-scene background="color: #1a1a2e">
+
+      <!-- ============ ENVIRONMENT ============ -->
+
+      <!-- A floor so you have a sense of "ground" -->
+      <a-plane
+        position="0 0 0"
+        rotation="-90 0 0"
+        width="20"
+        height="20"
+        color="#16213e"
+        shadow="receive: true">
+      </a-plane>
+
+      <!-- A bit of ambient + directional light so cubes look 3D -->
+      <a-entity light="type: ambient; intensity: 0.6"></a-entity>
+      <a-entity
+        light="type: directional; intensity: 0.8; castShadow: true"
+        position="2 4 1">
+      </a-entity>
+
+      <!-- A floating welcome text -->
+      <a-text
+        value="Hello, Quest!\nGrab the cubes."
+        align="center"
+        position="0 2.2 -2"
+        scale="2 2 2"
+        color="#e94560">
+      </a-text>
+
+      <!-- ============ GRABBABLE OBJECTS ============ -->
+      <!-- Each box is tagged .grabbable so super-hands can pick it up -->
+
+      <a-box
+        class="grabbable"
+        position="-0.4 1.4 -1.2"
+        width="0.25" height="0.25" depth="0.25"
+        color="#e94560"
+        shadow="cast: true"
+        hoverable grabbable stretchable draggable
+        dynamic-body>
+      </a-box>
+
+      <a-box
+        class="grabbable"
+        position="0 1.4 -1.2"
+        width="0.25" height="0.25" depth="0.25"
+        color="#0f3460"
+        shadow="cast: true"
+        hoverable grabbable stretchable draggable
+        dynamic-body>
+      </a-box>
+
+      <a-box
+        class="grabbable"
+        position="0.4 1.4 -1.2"
+        width="0.25" height="0.25" depth="0.25"
+        color="#53d8fb"
+        shadow="cast: true"
+        hoverable grabbable stretchable draggable
+        dynamic-body>
+      </a-box>
+
+      <!-- ============ PLAYER + HANDS ============ -->
+
+      <a-entity id="rig" position="0 0 0">
+        <!-- Head / camera -->
+        <a-camera position="0 1.6 0"></a-camera>
+
+        <!-- Left controller -->
+        <a-entity
+          id="leftHand"
+          super-hands="
+            colliderEvent: raycaster-intersection;
+            colliderEventProperty: els;
+            colliderEndEvent: raycaster-intersection-cleared;
+            colliderEndEventProperty: clearedEls;"
+          oculus-touch-controls="hand: left"
+          meta-touch-controls="hand: left"
+          raycaster="objects: .grabbable; far: 0.2"
+          line="color: #e94560; opacity: 0.5">
+        </a-entity>
+
+        <!-- Right controller -->
+        <a-entity
+          id="rightHand"
+          super-hands="
+            colliderEvent: raycaster-intersection;
+            colliderEventProperty: els;
+            colliderEndEvent: raycaster-intersection-cleared;
+            colliderEndEventProperty: clearedEls;"
+          oculus-touch-controls="hand: right"
+          meta-touch-controls="hand: right"
+          raycaster="objects: .grabbable; far: 0.2"
+          line="color: #53d8fb; opacity: 0.5">
+        </a-entity>
+      </a-entity>
+
+    </a-scene>
+  </body>
+</html>
