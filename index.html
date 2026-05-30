@@ -1,118 +1,499 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Quest Hello World</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>RETRO ARCHER — WebXR</title>
+<style>
+  :root { --red:#ff3b3b; --blue:#2d6cff; --yellow:#ffd23b; --ink:#0b0e1a; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; background:var(--ink); font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif; color:#fff; }
+  #overlay {
+    position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:
+      radial-gradient(circle at 50% 30%, #1a2350 0%, #0b0e1a 70%),
+      repeating-linear-gradient(0deg, transparent 0 38px, rgba(45,108,255,.06) 38px 40px);
+    text-align:center; padding:24px; z-index:10; transition:opacity .4s;
+  }
+  #overlay.hidden { opacity:0; pointer-events:none; }
+  h1 {
+    font-size:clamp(38px,9vw,84px); letter-spacing:4px; line-height:.95;
+    color:var(--yellow); text-shadow:0 4px 0 var(--red), 0 8px 0 var(--blue), 0 9px 16px rgba(0,0,0,.6);
+    margin-bottom:6px; font-weight:900;
+  }
+  .sub { color:#9fb0ff; letter-spacing:3px; font-size:14px; margin-bottom:28px; text-transform:uppercase; }
+  .card { background:rgba(13,18,40,.7); border:2px solid var(--blue); border-radius:14px; padding:20px 26px; max-width:520px; backdrop-filter:blur(4px); }
+  .card p { color:#cdd6ff; line-height:1.6; font-size:15px; margin:8px 0; }
+  .card b { color:var(--yellow); }
+  .btn {
+    margin-top:22px; display:inline-block; cursor:pointer; border:none; border-radius:12px;
+    padding:16px 38px; font-size:19px; font-weight:900; letter-spacing:2px; color:#0b0e1a;
+    background:linear-gradient(180deg,#ffe06a,#ffd23b); box-shadow:0 6px 0 #c79a14, 0 10px 18px rgba(0,0,0,.4);
+    transition:transform .06s, box-shadow .06s; text-transform:uppercase;
+  }
+  .btn:active { transform:translateY(4px); box-shadow:0 2px 0 #c79a14, 0 6px 12px rgba(0,0,0,.4); }
+  #hint { margin-top:14px; font-size:12px; color:#6f7dad; letter-spacing:1px; }
+  #vrbtn-slot { margin-top:14px; }
+  #vrbtn-slot button {
+    background:var(--blue) !important; color:#fff !important; border:2px solid #6f9bff !important;
+    border-radius:10px !important; font-weight:900 !important; letter-spacing:2px !important;
+  }
+</style>
+</head>
+<body>
+  <div id="overlay">
+    <h1>RETRO<br>ARCHER</h1>
+    <div class="sub">◆ WebXR Arcade Bow Gallery ◆</div>
+    <div class="card">
+      <p><b>IN VR:</b> Hold the bow with your <b>left</b> hand. Reach your <b>right</b> hand to it, squeeze the <b>trigger</b> to nock, pull back, and release to fire.</p>
+      <p><b>ON DESKTOP:</b> Move the mouse to aim, <b>hold + pull back</b>, then release to shoot. Great for a quick test.</p>
+      <p>Pop targets before they escape. Bullseyes and combos rack up the score. Survive the waves!</p>
+    </div>
+    <button class="btn" id="startBtn">▶ START</button>
+    <div id="vrbtn-slot"></div>
+    <div id="hint">Put on your Quest headset and tap "Enter VR" for the full experience.</div>
+  </div>
 
-    <!-- A-Frame core -->
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 
-    <!-- Super-hands gives us grab/drag interactions out of the box -->
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-super-hands-component@4.0.3/dist/super-hands.min.js"></script>
-    <!-- Physics + extras that super-hands builds on -->
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/physx@v0.2.0/dist/physx.min.js"></script>
-  </head>
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-  <body>
-    <a-scene background="color: #1a1a2e">
+/* ===================== CORE SETUP ===================== */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0e1a);
+scene.fog = new THREE.Fog(0x0b0e1a, 14, 42);
 
-      <!-- ============ ENVIRONMENT ============ -->
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.05, 200);
+camera.position.set(0, 1.6, 0);
 
-      <!-- A floor so you have a sense of "ground" -->
-      <a-plane
-        position="0 0 0"
-        rotation="-90 0 0"
-        width="20"
-        height="20"
-        color="#16213e"
-        shadow="receive: true">
-      </a-plane>
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
 
-      <!-- A bit of ambient + directional light so cubes look 3D -->
-      <a-entity light="type: ambient; intensity: 0.6"></a-entity>
-      <a-entity
-        light="type: directional; intensity: 0.8; castShadow: true"
-        position="2 4 1">
-      </a-entity>
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
 
-      <!-- A floating welcome text -->
-      <a-text
-        value="Hello, Quest!\nGrab the cubes."
-        align="center"
-        position="0 2.2 -2"
-        scale="2 2 2"
-        color="#e94560">
-      </a-text>
+const vrBtn = VRButton.createButton(renderer);
+document.getElementById('vrbtn-slot').appendChild(vrBtn);
 
-      <!-- ============ GRABBABLE OBJECTS ============ -->
-      <!-- Each box is tagged .grabbable so super-hands can pick it up -->
+/* ===================== LIGHTING ===================== */
+scene.add(new THREE.HemisphereLight(0x9fb6ff, 0x202040, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.4);
+key.position.set(4, 9, 6);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xff3b3b, 0.5);
+rim.position.set(-6, 4, -8);
+scene.add(rim);
 
-      <a-box
-        class="grabbable"
-        position="-0.4 1.4 -1.2"
-        width="0.25" height="0.25" depth="0.25"
-        color="#e94560"
-        shadow="cast: true"
-        hoverable grabbable stretchable draggable
-        dynamic-body>
-      </a-box>
+/* ===================== RETRO ARENA ===================== */
+const COL = { red:0xff3b3b, blue:0x2d6cff, yellow:0xffd23b, white:0xf3f6ff, dark:0x141a33 };
 
-      <a-box
-        class="grabbable"
-        position="0 1.4 -1.2"
-        width="0.25" height="0.25" depth="0.25"
-        color="#0f3460"
-        shadow="cast: true"
-        hoverable grabbable stretchable draggable
-        dynamic-body>
-      </a-box>
+const grid = new THREE.GridHelper(60, 60, COL.blue, 0x223066);
+grid.material.opacity = 0.55; grid.material.transparent = true;
+scene.add(grid);
 
-      <a-box
-        class="grabbable"
-        position="0.4 1.4 -1.2"
-        width="0.25" height="0.25" depth="0.25"
-        color="#53d8fb"
-        shadow="cast: true"
-        hoverable grabbable stretchable draggable
-        dynamic-body>
-      </a-box>
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(30, 48),
+  new THREE.MeshStandardMaterial({ color:0x0d1330, roughness:1, metalness:0 })
+);
+floor.rotation.x = -Math.PI/2; floor.position.y = -0.01;
+scene.add(floor);
 
-      <!-- ============ PLAYER + HANDS ============ -->
+const backGroup = new THREE.Group();
+const blockCols = [COL.red, COL.blue, COL.yellow];
+for (let i=0;i<24;i++){
+  const h = 1 + Math.random()*5;
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, h, 1.2),
+    new THREE.MeshStandardMaterial({ color:blockCols[i%3], roughness:.6, emissive:blockCols[i%3], emissiveIntensity:.12 })
+  );
+  m.position.set(-19 + i*1.7, h/2, -24);
+  backGroup.add(m);
+}
+scene.add(backGroup);
 
-      <a-entity id="rig" position="0 0 0">
-        <!-- Head / camera -->
-        <a-camera position="0 1.6 0"></a-camera>
+const sun = new THREE.Mesh(new THREE.CircleGeometry(6, 48), new THREE.MeshBasicMaterial({ color:COL.yellow }));
+sun.position.set(0, 7, -30);
+scene.add(sun);
 
-        <!-- Left controller -->
-        <a-entity
-          id="leftHand"
-          super-hands="
-            colliderEvent: raycaster-intersection;
-            colliderEventProperty: els;
-            colliderEndEvent: raycaster-intersection-cleared;
-            colliderEndEventProperty: clearedEls;"
-          oculus-touch-controls="hand: left"
-          meta-touch-controls="hand: left"
-          raycaster="objects: .grabbable; far: 0.2"
-          line="color: #e94560; opacity: 0.5">
-        </a-entity>
+/* ===================== HUD ===================== */
+const hudCanvas = document.createElement('canvas');
+hudCanvas.width = 1024; hudCanvas.height = 256;
+const hctx = hudCanvas.getContext('2d');
+const hudTex = new THREE.CanvasTexture(hudCanvas);
+const hud = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map:hudTex, transparent:true }));
+hud.position.set(0, 3.0, -7);
+scene.add(hud);
 
-        <!-- Right controller -->
-        <a-entity
-          id="rightHand"
-          super-hands="
-            colliderEvent: raycaster-intersection;
-            colliderEventProperty: els;
-            colliderEndEvent: raycaster-intersection-cleared;
-            colliderEndEventProperty: clearedEls;"
-          oculus-touch-controls="hand: right"
-          meta-touch-controls="hand: right"
-          raycaster="objects: .grabbable; far: 0.2"
-          line="color: #53d8fb; opacity: 0.5">
-        </a-entity>
-      </a-entity>
+function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function drawHUD(){
+  hctx.clearRect(0,0,1024,256);
+  hctx.fillStyle = 'rgba(13,18,40,.85)'; roundRect(hctx, 8,8,1008,240,24); hctx.fill();
+  hctx.lineWidth = 6; hctx.strokeStyle = '#2d6cff'; roundRect(hctx,8,8,1008,240,24); hctx.stroke();
+  hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#ffd23b'; hctx.font = '900 64px Trebuchet MS, sans-serif'; hctx.textAlign = 'left';
+  hctx.fillText('SCORE', 40, 70);
+  hctx.fillStyle = '#fff'; hctx.font = '900 96px Trebuchet MS, sans-serif';
+  hctx.fillText(String(state.score).padStart(5,'0'), 40, 170);
+  hctx.textAlign = 'right';
+  hctx.fillStyle = '#ff3b3b'; hctx.font = '900 52px Trebuchet MS, sans-serif';
+  hctx.fillText('WAVE ' + state.wave, 984, 56);
+  hctx.fillStyle = state.combo>1 ? '#ffd23b' : '#6f7dad'; hctx.font = '900 56px Trebuchet MS, sans-serif';
+  hctx.fillText(state.combo>1 ? ('COMBO x'+state.combo) : 'COMBO', 984, 128);
+  hctx.fillStyle = '#223066'; roundRect(hctx, 624, 178, 360, 30, 14); hctx.fill();
+  const frac = Math.max(0, state.waveTime/state.waveDuration);
+  hctx.fillStyle = frac<0.25 ? '#ff3b3b' : '#2d6cff'; roundRect(hctx, 624, 178, 360*frac, 30, 14); hctx.fill();
+  hctx.fillStyle='#9fb0ff'; hctx.font='700 28px Trebuchet MS, sans-serif'; hctx.textAlign='left';
+  hctx.fillText('TIME', 40, 210); hctx.fillText('ARROWS '+state.arrowsLeft, 250, 210);
+  hudTex.needsUpdate = true;
+}
 
-    </a-scene>
-  </body>
+const msgCanvas = document.createElement('canvas');
+msgCanvas.width=1024; msgCanvas.height=256;
+const mctx = msgCanvas.getContext('2d');
+const msgTex = new THREE.CanvasTexture(msgCanvas);
+const msgPlane = new THREE.Mesh(new THREE.PlaneGeometry(3.2,0.8), new THREE.MeshBasicMaterial({map:msgTex,transparent:true}));
+msgPlane.position.set(0,1.9,-6); msgPlane.visible=false;
+scene.add(msgPlane);
+let msgTimer = 0;
+function showMessage(text, color='#ffd23b', dur=2){
+  mctx.clearRect(0,0,1024,256);
+  mctx.textAlign='center'; mctx.textBaseline='middle';
+  mctx.fillStyle=color; mctx.font='900 120px Trebuchet MS, sans-serif';
+  mctx.shadowColor='rgba(0,0,0,.6)'; mctx.shadowBlur=20; mctx.shadowOffsetY=6;
+  mctx.fillText(text, 512, 128);
+  msgTex.needsUpdate=true; msgPlane.visible=true; msgTimer=dur;
+}
+
+/* ===================== AUDIO ===================== */
+let actx = null;
+function initAudio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(actx&&actx.state==='suspended') actx.resume(); }
+function blip(freq=440, dur=0.12, type='square', vol=0.18, slideTo=null){
+  if(!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq, actx.currentTime);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, actx.currentTime+dur);
+  g.gain.setValueAtTime(vol, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+  o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+}
+const sfx = {
+  draw:  ()=>blip(180,0.18,'sawtooth',0.10,420),
+  fire:  ()=>blip(660,0.16,'square',0.16,120),
+  hit:   ()=>{blip(880,0.10,'square',0.18,1400); blip(523,0.14,'triangle',0.12);},
+  bull:  ()=>{blip(1046,0.10,'square',0.2,2093); setTimeout(()=>blip(1568,0.14,'square',0.2),60);},
+  miss:  ()=>blip(140,0.2,'sawtooth',0.12,70),
+  wave:  ()=>{[523,659,784,1046].forEach((f,i)=>setTimeout(()=>blip(f,0.16,'square',0.18),i*90));},
+};
+
+/* ===================== GAME STATE ===================== */
+const state = {
+  score:0, combo:0, wave:1, waveTime:0, waveDuration:35, arrowsLeft:20,
+  running:false, targets:[], arrows:[], particles:[],
+  spawnTimer:0, spawnInterval:1.6, targetsThisWave:0, targetCap:8,
+};
+
+/* ===================== BOW + ARROW VISUALS ===================== */
+function makeBow(){
+  const g = new THREE.Group();
+  const bowMat = new THREE.MeshStandardMaterial({ color:COL.red, roughness:.4, metalness:.1, emissive:COL.red, emissiveIntensity:.15 });
+  const limb = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.035, 12, 40, Math.PI*1.1), bowMat);
+  limb.rotation.y = Math.PI/2;
+  g.add(limb);
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.22,12), new THREE.MeshStandardMaterial({color:COL.yellow,roughness:.5}));
+  g.add(grip);
+  return g;
+}
+const stringMat = new THREE.LineBasicMaterial({ color:COL.white });
+function makeArrow(){
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.7,8), new THREE.MeshStandardMaterial({color:COL.yellow,roughness:.5}));
+  shaft.rotation.x = Math.PI/2;
+  g.add(shaft);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.03,0.09,8), new THREE.MeshStandardMaterial({color:COL.blue,metalness:.4,roughness:.3,emissive:COL.blue,emissiveIntensity:.2}));
+  tip.position.set(0,0,-0.39); tip.rotation.x = -Math.PI/2;
+  g.add(tip);
+  const fl = new THREE.Mesh(new THREE.BoxGeometry(0.001,0.06,0.06), new THREE.MeshStandardMaterial({color:COL.red}));
+  fl.position.set(0,0,0.32); g.add(fl);
+  const fl2 = fl.clone(); fl2.rotation.z=Math.PI/2; g.add(fl2);
+  return g;
+}
+
+/* ===================== CONTROLLERS ===================== */
+const bowHand = renderer.xr.getControllerGrip(0);
+const drawHand = renderer.xr.getControllerGrip(1);
+const drawCtrl = renderer.xr.getController(1);
+scene.add(bowHand, drawHand, drawCtrl);
+
+const bow = makeBow();
+bow.rotation.y = Math.PI/2;
+bowHand.add(bow);
+
+const stringGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()]);
+const bowString = new THREE.Line(stringGeo, stringMat);
+bowHand.add(bowString);
+
+let nockedArrow = null;
+let drawing = false;
+
+[bowHand, drawHand].forEach((h,i)=>{
+  const c = new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12), new THREE.MeshStandardMaterial({color: i? COL.blue: COL.yellow, emissive:i?COL.blue:COL.yellow, emissiveIntensity:.3}));
+  h.add(c);
+});
+
+function startDraw(){
+  if(state.arrowsLeft<=0 || !state.running) return;
+  initAudio();
+  drawing = true;
+  nockedArrow = makeArrow();
+  scene.add(nockedArrow);
+  sfx.draw();
+}
+function releaseDraw(){
+  if(!drawing) return;
+  drawing = false;
+  if(!nockedArrow) return;
+  const bowPos = new THREE.Vector3(); bowHand.getWorldPosition(bowPos);
+  const drawPos = new THREE.Vector3(); drawHand.getWorldPosition(drawPos);
+  const dir = bowPos.clone().sub(drawPos);
+  const drawLen = dir.length();
+  dir.normalize();
+  const power = THREE.MathUtils.clamp(drawLen*22, 6, 30);
+  fireArrow(bowPos, dir, power, nockedArrow);
+  nockedArrow = null;
+  state.arrowsLeft--;
+  sfx.fire();
+}
+drawCtrl.addEventListener('selectstart', startDraw);
+drawCtrl.addEventListener('selectend', releaseDraw);
+
+/* ===================== FIRING ===================== */
+function orientArrow(mesh, dir){
+  const q = new THREE.Quaternion();
+  q.setFromUnitVectors(new THREE.Vector3(0,0,-1), dir.clone().normalize());
+  mesh.quaternion.copy(q);
+}
+function fireArrow(pos, dir, power, mesh){
+  mesh.position.copy(pos);
+  orientArrow(mesh, dir);
+  state.arrows.push({ mesh, vel:dir.clone().multiplyScalar(power), life:5 });
+  if(!mesh.parent) scene.add(mesh);
+}
+
+/* ===================== TARGETS ===================== */
+function makeTarget(){
+  const g = new THREE.Group();
+  const plate = new THREE.Mesh(new THREE.CircleGeometry(0.6,36), new THREE.MeshStandardMaterial({color:COL.dark, side:THREE.DoubleSide}));
+  plate.position.z = -0.01; g.add(plate);
+  const rings = [{r:0.55,c:COL.red},{r:0.42,c:COL.white},{r:0.30,c:COL.blue},{r:0.18,c:COL.red},{r:0.08,c:COL.yellow}];
+  rings.forEach((ring,i)=>{
+    const m = new THREE.Mesh(new THREE.CircleGeometry(ring.r, 36),
+      new THREE.MeshStandardMaterial({color:ring.c, roughness:.6, side:THREE.DoubleSide, emissive:ring.c, emissiveIntensity:.15}));
+    m.position.z = i*0.004 + 0.001; g.add(m);
+  });
+  return g;
+}
+function spawnTarget(){
+  const g = makeTarget();
+  const ang = (Math.random()-0.5)*1.6;
+  const dist = 7 + Math.random()*7;
+  g.position.set(Math.sin(ang)*dist, 1.0 + Math.random()*2.2, -Math.cos(ang)*dist);
+  g.lookAt(0,1.6,0);
+  const moving = state.wave>=2 && Math.random()<0.5;
+  scene.add(g);
+  state.targets.push({
+    mesh:g, radius:0.55, pos:g.position,
+    vx: moving ? (Math.random()-0.5)*0.9*(1+state.wave*0.1) : 0,
+    vy: moving ? (Math.random()-0.5)*0.5 : 0,
+    born: performance.now(), ttl: 6000 - state.wave*200
+  });
+  state.targetsThisWave++;
+}
+function scoreForRadius(d){
+  if(d<0.08) return {pts:100, bull:true,  label:'BULLSEYE!', color:'#ffd23b'};
+  if(d<0.18) return {pts:50,  bull:false, label:'GREAT', color:'#ff3b3b'};
+  if(d<0.30) return {pts:25,  bull:false, label:'NICE',  color:'#2d6cff'};
+  if(d<0.42) return {pts:10,  bull:false, label:'+10',   color:'#f3f6ff'};
+  return        {pts:5,   bull:false, label:'+5',    color:'#9fb0ff'};
+}
+
+/* ===================== PARTICLES ===================== */
+function burst(pos, color){
+  for(let i=0;i<14;i++){
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), new THREE.MeshBasicMaterial({color}));
+    p.position.copy(pos);
+    const v = new THREE.Vector3((Math.random()-0.5),(Math.random()-0.5),(Math.random()-0.5)).multiplyScalar(3);
+    scene.add(p);
+    state.particles.push({mesh:p, vel:v, life:0.7});
+  }
+}
+
+/* ===================== WAVE FLOW ===================== */
+function startWave(){
+  state.waveTime = state.waveDuration;
+  state.targetsThisWave = 0;
+  state.targetCap = 6 + state.wave*2;
+  state.spawnInterval = Math.max(0.7, 1.7 - state.wave*0.12);
+  state.arrowsLeft += 12 + state.wave*2;
+  sfx.wave();
+  showMessage('WAVE '+state.wave, '#ffd23b', 1.8);
+}
+function endWave(){
+  state.wave++;
+  state.targets.forEach(t=>scene.remove(t.mesh));
+  state.targets.length = 0;
+  startWave();
+}
+function startGame(){
+  state.score=0; state.combo=0; state.wave=1; state.arrowsLeft=20; state.running=true;
+  state.targets.forEach(t=>scene.remove(t.mesh)); state.targets.length=0;
+  startWave();
+  showMessage('GO!', '#2d6cff', 1.2);
+}
+
+/* ===================== DESKTOP FALLBACK ===================== */
+const ray = new THREE.Raycaster();
+const desktopAim = new THREE.Vector2(0,0);
+let desktopDrawing=false, desktopPower=6;
+addEventListener('mousemove', e=>{
+  desktopAim.x = (e.clientX/innerWidth)*2-1;
+  desktopAim.y = -(e.clientY/innerHeight)*2+1;
+});
+addEventListener('mousedown', ()=>{ if(renderer.xr.isPresenting) return; initAudio(); desktopDrawing=true; desktopPower=6; sfx.draw(); });
+addEventListener('mouseup', ()=>{
+  if(renderer.xr.isPresenting || !desktopDrawing) return;
+  desktopDrawing=false;
+  if(!state.running || state.arrowsLeft<=0) return;
+  ray.setFromCamera(desktopAim, camera);
+  fireArrow(camera.position.clone(), ray.ray.direction.clone(), desktopPower, makeArrow());
+  state.arrowsLeft--; sfx.fire();
+});
+
+/* ===================== UPDATE LOOP ===================== */
+const clock = new THREE.Clock();
+const GRAV = 6.5;
+
+function updateBowString(){
+  const top = new THREE.Vector3(0,0.42,0), bot = new THREE.Vector3(0,-0.42,0);
+  let mid = new THREE.Vector3(0,0,0);
+  if(drawing && nockedArrow){
+    const dpW = new THREE.Vector3(); drawHand.getWorldPosition(dpW);
+    mid = bow.parent.worldToLocal(dpW.clone());
+  }
+  const pts = stringGeo.attributes.position;
+  pts.setXYZ(0, top.x,top.y,top.z);
+  pts.setXYZ(1, mid.x,mid.y,mid.z);
+  pts.setXYZ(2, bot.x,bot.y,bot.z);
+  pts.needsUpdate = true;
+  if(drawing && nockedArrow){
+    const bowPos = new THREE.Vector3(); bowHand.getWorldPosition(bowPos);
+    const drawPos = new THREE.Vector3(); drawHand.getWorldPosition(drawPos);
+    const dir = bowPos.clone().sub(drawPos).normalize();
+    nockedArrow.position.copy(drawPos);
+    orientArrow(nockedArrow, dir);
+  }
+}
+
+function registerHit(target, sc, pos){
+  state.combo++;
+  const comboMult = 1 + Math.floor(state.combo/3)*0.5;
+  const gained = Math.round(sc.pts * comboMult);
+  state.score += gained;
+  burst(pos, sc.bull?COL.yellow:COL.blue);
+  if(sc.bull){ sfx.bull(); showMessage(sc.label,'#ffd23b',1.2); }
+  else { sfx.hit(); if(state.combo>=3) showMessage('x'+state.combo+'  +'+gained, sc.color, 0.9); }
+}
+
+function update(dt){
+  if(desktopDrawing) desktopPower = Math.min(28, desktopPower + dt*22);
+  drawHUD();
+  if(msgTimer>0){ msgTimer-=dt; if(msgTimer<=0) msgPlane.visible=false; }
+
+  if(state.running){
+    state.waveTime -= dt;
+    state.spawnTimer -= dt;
+    if(state.spawnTimer<=0 && state.targets.length<10 && state.targetsThisWave<state.targetCap){
+      spawnTarget(); state.spawnTimer = state.spawnInterval;
+    }
+    if(state.waveTime<=0 || (state.targetsThisWave>=state.targetCap && state.targets.length===0)){
+      endWave();
+    }
+  }
+
+  if(renderer.xr.isPresenting) updateBowString();
+
+  for(let i=state.arrows.length-1;i>=0;i--){
+    const a = state.arrows[i];
+    a.vel.y -= GRAV*dt;
+    a.mesh.position.add(a.vel.clone().multiplyScalar(dt));
+    orientArrow(a.mesh, a.vel.clone().normalize());
+    a.life -= dt;
+    let hit=false;
+    for(let j=state.targets.length-1;j>=0;j--){
+      const t = state.targets[j];
+      const d = a.mesh.position.distanceTo(t.pos);
+      if(d < t.radius){
+        registerHit(t, scoreForRadius(d), a.mesh.position.clone());
+        scene.remove(t.mesh); state.targets.splice(j,1);
+        hit=true; break;
+      }
+    }
+    if(hit || a.life<=0 || a.mesh.position.y< -0.5 || a.mesh.position.length()>60){
+      scene.remove(a.mesh); state.arrows.splice(i,1);
+    }
+  }
+
+  for(let j=state.targets.length-1;j>=0;j--){
+    const t = state.targets[j];
+    t.pos.x += t.vx*dt; t.pos.y += t.vy*dt;
+    if(t.pos.y<0.6 || t.pos.y>3.6) t.vy*=-1;
+    if(Math.abs(t.pos.x)>9) t.vx*=-1;
+    t.mesh.lookAt(0,1.6,0);
+    t.mesh.rotation.z += dt*0.6;
+    if(performance.now()-t.born > t.ttl){
+      scene.remove(t.mesh); state.targets.splice(j,1);
+      state.combo=0; sfx.miss();
+    }
+  }
+
+  for(let i=state.particles.length-1;i>=0;i--){
+    const p=state.particles[i];
+    p.vel.y -= 4*dt;
+    p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.life-=dt; p.mesh.scale.setScalar(Math.max(0.01, p.life/0.7));
+    if(p.life<=0){ scene.remove(p.mesh); state.particles.splice(i,1); }
+  }
+
+  sun.position.y = 7 + Math.sin(performance.now()*0.001)*0.2;
+}
+
+renderer.setAnimationLoop(()=>{
+  const dt = Math.min(clock.getDelta(), 0.05);
+  update(dt);
+  renderer.render(scene, camera);
+});
+
+/* ===================== UI WIRING ===================== */
+const overlay = document.getElementById('overlay');
+document.getElementById('startBtn').addEventListener('click', ()=>{ initAudio(); overlay.classList.add('hidden'); startGame(); });
+renderer.xr.addEventListener('sessionstart', ()=>{ overlay.classList.add('hidden'); if(!state.running) startGame(); });
+
+drawHUD();
+</script>
+</body>
 </html>
