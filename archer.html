@@ -493,6 +493,7 @@ function update(dt){
 
 renderer.setAnimationLoop(()=>{
   const dt = Math.min(clock.getDelta(), 0.05);
+  window.pollVRExit && window.pollVRExit(renderer);
   update(dt);
   renderer.render(scene, camera);
 });

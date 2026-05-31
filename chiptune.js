@@ -161,6 +161,27 @@ function makeChiptune(ctx, opts){
 // tag — classic scripts load from file:// (double-click), unlike ES-module imports.
 if (typeof window !== 'undefined') window.makeChiptune = makeChiptune;
 
+/* ===================== IN-VR EXIT ===================== */
+// Call window.pollVRExit(renderer) inside each game's animation loop. Pressing the
+// B or Y button (upper face button on either Touch controller) ends the immersive
+// session and returns to the page. Guarded so it never throws.
+if (typeof window !== 'undefined'){
+  let exiting = false;
+  window.pollVRExit = function(renderer){
+    try {
+      const s = renderer && renderer.xr && renderer.xr.getSession && renderer.xr.getSession();
+      if (!s || !s.inputSources) { exiting = false; return; }
+      let pressed = false;
+      for (const src of s.inputSources){
+        const gp = src && src.gamepad; if (!gp || !gp.buttons) continue;
+        if (gp.buttons[5] && gp.buttons[5].pressed) pressed = true;  // B / Y upper face button
+      }
+      if (pressed && !exiting){ exiting = true; const p = s.end(); if (p && p.catch) p.catch(()=>{}); }
+      else if (!pressed) exiting = false;
+    } catch (e) {}
+  };
+}
+
 /* ===================== VOICE HYPE ===================== */
 // Spoken motivational callouts via the browser's built-in speech synthesis (no audio
 // files). Throttled so it celebrates without talking over itself, and silenced by the

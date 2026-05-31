@@ -188,9 +188,11 @@ const S={ score:0, combo:0, running:false, notes:[], particles:[], hits:0, total
 
 function makeStick(color){const g=new THREE.Group();
   const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.016,0.34,10),new THREE.MeshStandardMaterial({color:0xd9c4a0,roughness:.6}));
-  shaft.position.y=0.17; const tip=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.5}));
-  tip.position.y=0.35; g.add(shaft,tip); g.userData.tipLocal=new THREE.Vector3(0,0.35,0); return g;}
-const gripL=renderer.xr.getControllerGrip(0), gripR=renderer.xr.getControllerGrip(1);
+  shaft.rotation.x=Math.PI/2; shaft.position.z=-0.17;                    // stick extends forward (-Z)
+  const tipM=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.5}));
+  tipM.position.z=-0.35; g.add(shaft,tipM);
+  const tip=new THREE.Object3D(); tip.position.set(0,0,-0.35); g.add(tip); g.userData.tip=tip; return g;}
+const gripL=renderer.xr.getController(0), gripR=renderer.xr.getController(1);
 scene.add(gripL,gripR);
 const stickL=makeStick(COL.red), stickR=makeStick(COL.blue);
 gripL.add(stickL); gripR.add(stickR);
@@ -249,7 +251,7 @@ function update(dt){
 
   // VR stick strikes
   if(renderer.xr.isPresenting){
-    [stickL,stickR].forEach((st,si)=>{ const w=st.localToWorld(st.userData.tipLocal.clone());
+    [stickL,stickR].forEach((st,si)=>{ const w=new THREE.Vector3(); st.userData.tip.getWorldPosition(w);
       let near=-1; lanes.forEach((ln,li)=>{ if(w.distanceTo(ln.pad.position)<0.36) near=li; });
       if(near>=0 && !stickIn[si]){ stickIn[si]=true; tryHit(near); }
       else if(near<0) stickIn[si]=false; });
@@ -267,7 +269,7 @@ function update(dt){
   for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.vel.y-=5*dt;p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
     p.life-=dt;p.mesh.scale.setScalar(Math.max(.01,p.life/.5));if(p.life<=0){scene.remove(p.mesh);S.particles.splice(i,1);}}
 }
-renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);window.pollVRExit&&window.pollVRExit(renderer);update(dt);renderer.render(scene,camera);});
 
 const overlay=document.getElementById('overlay');
 document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});

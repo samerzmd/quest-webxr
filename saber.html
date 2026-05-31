@@ -113,15 +113,17 @@ const S={ score:0, combo:0, lives:5, running:false, blocks:[], particles:[], spa
 function makeSaber(color){
   const g=new THREE.Group();
   const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.12,10),new THREE.MeshStandardMaterial({color:0x222233,metalness:.6,roughness:.4}));
+  handle.rotation.x=Math.PI/2; handle.position.z=0.02;                  // handle along the controller axis
   const blade=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.9,12),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.9}));
-  blade.position.y=0.5; g.add(handle,blade);
-  g.userData.tipLocal=new THREE.Vector3(0,0.95,0);
+  blade.rotation.x=Math.PI/2; blade.position.z=-0.5;                    // blade extends forward (-Z), where you point
+  g.add(handle,blade);
+  const tip=new THREE.Object3D(); tip.position.set(0,0,-0.95); g.add(tip); g.userData.tip=tip;
   return g;
 }
-const gripL=renderer.xr.getControllerGrip(0), gripR=renderer.xr.getControllerGrip(1);
+// attach to the controllers' pointing space so the blade follows aim + wrist rotation
+const gripL=renderer.xr.getController(0), gripR=renderer.xr.getController(1);
 scene.add(gripL,gripR);
 const saberL=makeSaber(COL.red), saberR=makeSaber(COL.blue);
-saberL.rotation.x=-0.3; saberR.rotation.x=-0.3;
 gripL.add(saberL); gripR.add(saberR);
 
 // blocks
@@ -155,7 +157,7 @@ function activeTips(){
   const tips=[];
   if(renderer.xr.isPresenting){
     [ [saberL,true],[saberR,false] ].forEach(([s,isRed])=>{
-      const w=s.localToWorld(s.userData.tipLocal.clone()); tips.push({pos:w,isRed});
+      const w=new THREE.Vector3(); s.userData.tip.getWorldPosition(w); tips.push({pos:w,isRed});
     });
   } else {
     if(mouseRed||mouseBlue){
@@ -205,7 +207,7 @@ function update(dt){
     p.life-=dt;p.mesh.scale.setScalar(Math.max(.01,p.life/.6));if(p.life<=0){scene.remove(p.mesh);S.particles.splice(i,1);}}
   if(S.running&&S.lives<=0){ S.running=false; showMsg('GAME OVER','#ff3b3b',3); setTimeout(()=>{if(!S.running)startGame();},3200); }
 }
-renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);window.pollVRExit&&window.pollVRExit(renderer);update(dt);renderer.render(scene,camera);});
 
 const overlay=document.getElementById('overlay');
 document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});

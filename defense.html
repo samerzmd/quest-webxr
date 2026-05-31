@@ -189,7 +189,7 @@ function update(dt){
   if(S.running&&S.base<=0){S.base=0;S.running=false;showMsg('BASE LOST','#ff3b3b',3);
     S.enemies.forEach(e=>scene.remove(e));S.enemies=[];S.alive=0; setTimeout(()=>{if(!S.running)startGame();},3200);}
 }
-renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);window.pollVRExit&&window.pollVRExit(renderer);update(dt);renderer.render(scene,camera);});
 
 const overlay=document.getElementById('overlay');
 document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});

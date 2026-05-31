@@ -155,7 +155,7 @@ function throwFrom(origin,dir){
 const ctrlL=renderer.xr.getController(0), ctrlR=renderer.xr.getController(1);
 const gripL=renderer.xr.getControllerGrip(0), gripR=renderer.xr.getControllerGrip(1);
 scene.add(ctrlL,ctrlR,gripL,gripR);
-[gripL,gripR].forEach(h=>h.add(makeAxe()));
+[ctrlL,ctrlR].forEach(h=>{ const ax=makeAxe(); ax.rotation.x=-Math.PI/2; h.add(ax); });  // axe points forward, matching the throw
 function fireCtrl(ctrl){const o=new THREE.Vector3();ctrl.getWorldPosition(o);
   const dir=new THREE.Vector3(0,0,-1).applyQuaternion(ctrl.getWorldQuaternion(new THREE.Quaternion())).normalize(); throwFrom(o,dir);}
 ctrlL.addEventListener('selectstart',()=>{initAudio();fireCtrl(ctrlL);});
@@ -198,7 +198,7 @@ function update(dt){
     p.mesh.rotation.x+=p.spin*dt;p.life-=dt;p.mesh.scale.setScalar(Math.max(.01,p.life/.7));if(p.life<=0){scene.remove(p.mesh);S.particles.splice(i,1);}}
   pl.intensity=0.9+Math.sin(performance.now()*0.004)*0.2;
 }
-renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);window.pollVRExit&&window.pollVRExit(renderer);update(dt);renderer.render(scene,camera);});
 
 const overlay=document.getElementById('overlay');
 document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});

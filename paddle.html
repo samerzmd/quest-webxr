@@ -225,7 +225,7 @@ function update(dt){
   for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.userData.vel.y-=5*dt;p.position.add(p.userData.vel.clone().multiplyScalar(dt));
     p.userData.life-=dt;p.scale.setScalar(Math.max(.01,p.userData.life/.5));if(p.userData.life<=0){scene.remove(p);S.particles.splice(i,1);}}
 }
-renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);window.pollVRExit&&window.pollVRExit(renderer);update(dt);renderer.render(scene,camera);});
 
 const overlay=document.getElementById('overlay');
 document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});

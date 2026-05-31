@@ -65,15 +65,16 @@ const grid=new THREE.GridHelper(40,40,COL.green,0x14402a); grid.material.opacity
 
 // ----- whack grid table -----
 const ROWS=3, COLS=3;
-const board=new THREE.Group(); board.position.set(0,1.0,-1.4); board.rotation.x=-0.5; scene.add(board);
-const table=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.1,1.6),new THREE.MeshStandardMaterial({color:0x16213e,roughness:.8}));
+// arcade cabinet: close, waist-high, gently tilted toward the player so every hole is in reach
+const board=new THREE.Group(); board.position.set(0,0.95,-0.6); board.rotation.x=-Math.PI/5; scene.add(board);
+const table=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.1,1.1),new THREE.MeshStandardMaterial({color:0x16213e,roughness:.8}));
 board.add(table);
 const holes=[];
 for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-  const x=(c-1)*0.62, z=(r-1)*0.5;
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.2,0.03,10,24),new THREE.MeshStandardMaterial({color:COL.blue,emissive:COL.blue,emissiveIntensity:.3}));
+  const x=(c-1)*0.45, z=(r-1)*0.36;
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.16,0.025,10,24),new THREE.MeshStandardMaterial({color:COL.blue,emissive:COL.blue,emissiveIntensity:.3}));
   ring.rotation.x=Math.PI/2; ring.position.set(x,0.06,z); board.add(ring);
-  const hole=new THREE.Mesh(new THREE.CircleGeometry(0.2,24),new THREE.MeshBasicMaterial({color:0x05070f}));
+  const hole=new THREE.Mesh(new THREE.CircleGeometry(0.16,24),new THREE.MeshBasicMaterial({color:0x05070f}));
   hole.rotation.x=-Math.PI/2; hole.position.set(x,0.055,z); board.add(hole);
   holes.push({x,z,occupied:null});
 }
@@ -132,7 +133,7 @@ function makeMallet(color){const g=new THREE.Group();
   const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.28,10),new THREE.MeshStandardMaterial({color:0x6a4a2a,roughness:.7}));
   const head=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.16,14),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.25,metalness:.3}));
   head.rotation.z=Math.PI/2; head.position.y=0.2; g.add(handle,head);
-  g.userData.hitLocal=new THREE.Vector3(0,0.2,0); return g;}
+  const tip=new THREE.Object3D(); tip.position.set(0,0.24,0); g.add(tip); g.userData.tip=tip; return g;}
 const gripL=renderer.xr.getControllerGrip(0), gripR=renderer.xr.getControllerGrip(1);
 scene.add(gripL,gripR);
 gripL.add(makeMallet(COL.blue)); gripR.add(makeMallet(COL.yellow));
@@ -190,7 +191,7 @@ function update(dt){
   }
   // VR mallet whacks
   if(renderer.xr.isPresenting){
-    [malletL,malletR].forEach(m=>{const w=m.localToWorld(m.userData.hitLocal.clone()); whackAt(w);});
+    [malletL,malletR].forEach(m=>{const w=new THREE.Vector3(); m.userData.tip.getWorldPosition(w); whackAt(w);});
   }
   // bot animation
   for(let i=S.bots.length-1;i>=0;i--){const bot=S.bots[i]; bot.userData.t+=dt;
@@ -205,7 +206,7 @@ function update(dt){
   for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.vel.y-=5*dt;p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
     p.life-=dt;p.mesh.scale.setScalar(Math.max(.01,p.life/.5));if(p.life<=0){scene.remove(p.mesh);S.particles.splice(i,1);}}
 }
-renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);window.pollVRExit&&window.pollVRExit(renderer);update(dt);renderer.render(scene,camera);});
 
 const overlay=document.getElementById('overlay');
 document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});
