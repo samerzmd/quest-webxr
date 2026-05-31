@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>HOOPS VR — WebXR</title>
+<style>
+  :root{ --red:#ff3b3b; --blue:#2d6cff; --yellow:#ffd23b; --orange:#ff8a3b; --ink:#0b0e1a; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff;}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 30%,#3a2410 0%,#0b0e1a 70%);text-align:center;padding:24px;z-index:10;transition:opacity .4s;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  h1{font-size:clamp(38px,9vw,84px);letter-spacing:4px;line-height:.95;color:var(--orange);
+    text-shadow:0 4px 0 var(--red),0 8px 18px rgba(0,0,0,.6);margin-bottom:6px;font-weight:900;}
+  .sub{color:#ffcf9f;letter-spacing:3px;font-size:14px;margin-bottom:28px;text-transform:uppercase;}
+  .card{background:rgba(13,18,40,.7);border:2px solid var(--orange);border-radius:14px;padding:20px 26px;max-width:520px;}
+  .card p{color:#ffe6cf;line-height:1.6;font-size:15px;margin:8px 0;}
+  .card b{color:var(--yellow);}
+  .btn{margin-top:22px;cursor:pointer;border:none;border-radius:12px;padding:16px 38px;font-size:19px;font-weight:900;
+    letter-spacing:2px;color:#3a2410;background:linear-gradient(180deg,#ffb27a,#ff8a3b);box-shadow:0 6px 0 #b9551a;text-transform:uppercase;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #b9551a;}
+  #hint{margin-top:14px;font-size:12px;color:#a07a5f;letter-spacing:1px;}
+  #vrbtn-slot{margin-top:14px;}
+  #vrbtn-slot button{background:var(--orange)!important;color:#fff!important;border:2px solid #ffb27a!important;border-radius:10px!important;font-weight:900!important;}
+  #backlink{position:fixed;top:16px;left:16px;z-index:20;color:#ffcf9f;text-decoration:none;font-weight:900;letter-spacing:2px;
+    font-size:14px;background:rgba(13,18,40,.7);border:2px solid var(--orange);border-radius:10px;padding:8px 14px;}
+  #backlink:hover{color:var(--yellow);border-color:var(--yellow);}
+</style>
+</head>
+<body>
+  <a id="backlink" href="index.html">◄ ARCADE</a>
+  <div id="overlay">
+    <h1>HOOPS<br>VR</h1>
+    <div class="sub">◆ WebXR Arcade Basketball ◆</div>
+    <div class="card">
+      <p><b>IN VR:</b> Squeeze the <b>trigger or grip</b> to grab the ball that floats by your hand, swing, and release to shoot. Follow through!</p>
+      <p><b>ON DESKTOP:</b> Aim with the mouse, <b>hold to charge power</b>, release to shoot. A power bar shows your strength.</p>
+      <p>Sink shots through the drifting hoop before the shot clock runs out. Swish for bonus points!</p>
+    </div>
+    <button class="btn" id="startBtn">▶ START</button>
+    <div id="vrbtn-slot"></div>
+    <div id="hint">VR throws use real hand motion — flick your wrist on release.</div>
+  </div>
+
+<script src="chiptune.js"></script>
+<script type="importmap">
+{ "imports": { "three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+const COL={ red:0xff3b3b, blue:0x2d6cff, yellow:0xffd23b, orange:0xff8a3b, white:0xf3f6ff };
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0b0e1a); scene.fog=new THREE.Fog(0x0b0e1a,16,46);
+const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.05,200); camera.position.set(0,1.6,0);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+document.getElementById('vrbtn-slot').appendChild(VRButton.createButton(renderer));
+
+scene.add(new THREE.HemisphereLight(0xffe0c0,0x202030,1.1));
+const key=new THREE.DirectionalLight(0xffffff,1.2); key.position.set(2,9,5); scene.add(key);
+
+// court
+const grid=new THREE.GridHelper(40,40,COL.orange,0x442a14); grid.material.opacity=.45; grid.material.transparent=true; scene.add(grid);
+const court=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshStandardMaterial({color:0x1a1206,roughness:1}));
+court.rotation.x=-Math.PI/2; court.position.y=-0.01; scene.add(court);
+
+// backboard + hoop (group drifts)
+const rig=new THREE.Group(); scene.add(rig);
+const board=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,0.08),new THREE.MeshStandardMaterial({color:COL.white,emissive:0x223,emissiveIntensity:.1}));
+board.position.set(0,3.0,0); rig.add(board);
+const sq=new THREE.Mesh(new THREE.PlaneGeometry(0.6,0.45),new THREE.MeshBasicMaterial({color:COL.red,side:THREE.DoubleSide}));
+sq.position.set(0,2.85,0.05); rig.add(sq);
+const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,3.6,12),new THREE.MeshStandardMaterial({color:0x444,metalness:.5}));
+pole.position.set(0,1.8,-0.6); rig.add(pole);
+const RIM_R=0.32;
+const rim=new THREE.Mesh(new THREE.TorusGeometry(RIM_R,0.03,12,32),new THREE.MeshStandardMaterial({color:COL.orange,emissive:COL.orange,emissiveIntensity:.5}));
+rim.rotation.x=Math.PI/2; rim.position.set(0,2.45,0.42); rig.add(rim);
+// net (cone of lines)
+const netMat=new THREE.LineBasicMaterial({color:COL.white,transparent:true,opacity:.6});
+for(let i=0;i<12;i++){const a=i/12*Math.PI*2;
+  const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(Math.cos(a)*RIM_R,0,Math.sin(a)*RIM_R),new THREE.Vector3(Math.cos(a)*RIM_R*0.5,-0.35,Math.sin(a)*RIM_R*0.5)]);
+  const l=new THREE.Line(g,netMat); l.position.copy(rim.position); rig.add(l);}
+rig.position.set(0,0,-6);
+
+// HUD
+const hudCanvas=document.createElement('canvas'); hudCanvas.width=1024; hudCanvas.height=256;
+const hctx=hudCanvas.getContext('2d'); const hudTex=new THREE.CanvasTexture(hudCanvas);
+const hud=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.6),new THREE.MeshBasicMaterial({map:hudTex,transparent:true}));
+hud.position.set(0,3.6,-7); scene.add(hud);
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function drawHUD(){
+  hctx.clearRect(0,0,1024,256); hctx.fillStyle='rgba(13,18,40,.85)'; rr(hctx,8,8,1008,240,24);hctx.fill();
+  hctx.lineWidth=6;hctx.strokeStyle='#ff8a3b';rr(hctx,8,8,1008,240,24);hctx.stroke(); hctx.textBaseline='middle';
+  hctx.textAlign='left';hctx.fillStyle='#ffd23b';hctx.font='900 56px Trebuchet MS';hctx.fillText('SCORE',40,64);
+  hctx.fillStyle='#fff';hctx.font='900 92px Trebuchet MS';hctx.fillText(String(S.score).padStart(4,'0'),40,168);
+  hctx.textAlign='right';hctx.fillStyle='#ff8a3b';hctx.font='900 50px Trebuchet MS';hctx.fillText('SHOTS '+S.shots,984,56);
+  hctx.fillStyle=S.clock<8?'#ff3b3b':'#3bffa1';hctx.font='900 72px Trebuchet MS';hctx.fillText(Math.ceil(S.clock)+'s',984,140);
+  hctx.fillStyle='#223066';rr(hctx,40,200,944,22,10);hctx.fill();
+  hctx.fillStyle='#ff8a3b';rr(hctx,40,200,944*Math.min(1,S.clock/30),22,10);hctx.fill();
+  hudTex.needsUpdate=true;
+}
+const msgCanvas=document.createElement('canvas'); msgCanvas.width=1024; msgCanvas.height=256;
+const mctx=msgCanvas.getContext('2d'); const msgTex=new THREE.CanvasTexture(msgCanvas);
+const msgPlane=new THREE.Mesh(new THREE.PlaneGeometry(3.0,0.75),new THREE.MeshBasicMaterial({map:msgTex,transparent:true}));
+msgPlane.position.set(0,2.2,-5.5); msgPlane.visible=false; scene.add(msgPlane); let msgT=0;
+function showMsg(t,c='#ffd23b',d=1.4){mctx.clearRect(0,0,1024,256);mctx.textAlign='center';mctx.textBaseline='middle';
+  mctx.fillStyle=c;mctx.font='900 100px Trebuchet MS';mctx.shadowColor='rgba(0,0,0,.6)';mctx.shadowBlur=18;
+  mctx.fillText(t,512,128);msgTex.needsUpdate=true;msgPlane.visible=true;msgT=d;}
+
+let music=null; let actx=null; function initAudio(){if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}if(actx&&actx.state==='suspended')actx.resume(); if(actx&&!music){music=makeChiptune(actx);}}
+function blip(f,d=.12,t='square',v=.16,sl=null){if(!actx)return;const o=actx.createOscillator(),g=actx.createGain();o.type=t;
+  o.frequency.setValueAtTime(f,actx.currentTime);if(sl)o.frequency.exponentialRampToValueAtTime(sl,actx.currentTime+d);
+  g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d);
+  o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+d);}
+const sfx={ grab:()=>blip(300,.08,'square',.12,500), throw:()=>blip(420,.1,'square',.12,200),
+  score:()=>{[659,784,1046,1318].forEach((f,i)=>setTimeout(()=>blip(f,.13,'square',.18),i*70));},
+  swish:()=>{[784,1046,1318,1568].forEach((f,i)=>setTimeout(()=>blip(f,.12,'triangle',.18),i*55));},
+  bounce:()=>blip(180,.08,'sine',.1,90), buzzer:()=>blip(120,.5,'sawtooth',.2,80) };
+
+const S={ score:0, shots:0, clock:30, running:false, balls:[], particles:[] };
+const GRAV=9.0;
+
+function makeBall(){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(0.12,20,16),new THREE.MeshStandardMaterial({color:COL.orange,roughness:.7}));
+  const seam=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(0.121,8,6)),new THREE.LineBasicMaterial({color:0x5a2a00}));
+  m.add(seam); return m;
+}
+function burst(pos,color){for(let i=0;i<12;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05),new THREE.MeshBasicMaterial({color}));
+  p.position.copy(pos);const v=new THREE.Vector3((Math.random()-.5),(Math.random()),(Math.random()-.5)).multiplyScalar(3);
+  scene.add(p);S.particles.push({mesh:p,vel:v,life:.6});}}
+
+// ---- VR grab/throw ----
+const ctrlL=renderer.xr.getController(0), ctrlR=renderer.xr.getController(1);
+const gripL=renderer.xr.getControllerGrip(0), gripR=renderer.xr.getControllerGrip(1);
+scene.add(ctrlL,ctrlR,gripL,gripR);
+[gripL,gripR].forEach((h,i)=>{const c=new THREE.Mesh(new THREE.SphereGeometry(0.03,10,10),new THREE.MeshStandardMaterial({color:COL.yellow,emissive:COL.yellow,emissiveIntensity:.3}));h.add(c);});
+const held={left:null,right:null};
+const prevPos={left:new THREE.Vector3(),right:new THREE.Vector3()};
+const handVel={left:new THREE.Vector3(),right:new THREE.Vector3()};
+
+function grab(side){
+  if(!S.running) return;
+  const grip=side==='left'?gripL:gripR;
+  if(held[side]) return;
+  initAudio();
+  const ball=makeBall(); scene.add(ball);
+  const wp=new THREE.Vector3(); grip.getWorldPosition(wp); ball.position.copy(wp);
+  held[side]=ball; sfx.grab();
+}
+function release(side){
+  const ball=held[side]; if(!ball) return; held[side]=null;
+  S.balls.push({mesh:ball,vel:handVel[side].clone().multiplyScalar(1.4),life:6,scored:false,bouncedRim:false});
+  S.shots++; sfx.throw();
+}
+ctrlL.addEventListener('selectstart',()=>grab('left'));
+ctrlL.addEventListener('selectend',()=>release('left'));
+ctrlL.addEventListener('squeezestart',()=>grab('left'));
+ctrlL.addEventListener('squeezeend',()=>release('left'));
+ctrlR.addEventListener('selectstart',()=>grab('right'));
+ctrlR.addEventListener('selectend',()=>release('right'));
+ctrlR.addEventListener('squeezestart',()=>grab('right'));
+ctrlR.addEventListener('squeezeend',()=>release('right'));
+
+// ---- desktop charge throw ----
+const ray=new THREE.Raycaster(); const aim=new THREE.Vector2(0,0);
+let charging=false, power=0;
+addEventListener('mousemove',e=>{aim.x=(e.clientX/innerWidth)*2-1;aim.y=-(e.clientY/innerHeight)*2+1;});
+addEventListener('mousedown',()=>{if(renderer.xr.isPresenting)return;initAudio();charging=true;power=0;});
+addEventListener('mouseup',()=>{if(renderer.xr.isPresenting||!charging)return;charging=false;
+  if(!S.running)return;
+  ray.setFromCamera(aim,camera);
+  const dir=ray.ray.direction.clone(); dir.y+=0.35; dir.normalize();
+  const speed=7+power*9;
+  const ball=makeBall(); ball.position.copy(camera.position.clone().add(dir.clone().multiplyScalar(0.4)));
+  scene.add(ball); S.balls.push({mesh:ball,vel:dir.multiplyScalar(speed),life:6,scored:false,bouncedRim:false});
+  S.shots++; sfx.throw();});
+
+function rimWorld(){ const w=new THREE.Vector3(); rim.getWorldPosition(w); return w; }
+
+function startGame(){ initAudio(); music&&music.ensure('hoops'); S.score=0;S.shots=0;S.clock=30;S.running=true;
+  S.balls.forEach(b=>scene.remove(b.mesh));S.balls=[]; held.left&&scene.remove(held.left);held.left=null;held.right&&scene.remove(held.right);held.right=null;
+  showMsg('SHOOT!','#ff8a3b',1.2); }
+
+const clock=new THREE.Clock();
+function update(dt){
+  drawHUD(); if(msgT>0){msgT-=dt;if(msgT<=0)msgPlane.visible=false;}
+  if(charging) power=Math.min(1,power+dt*0.8);
+
+  if(S.running){ S.clock-=dt; if(S.clock<=0){ S.clock=0;S.running=false; sfx.buzzer(); showMsg('TIME! '+S.score+' PTS','#ffd23b',3);
+    setTimeout(()=>{if(!S.running)startGame();},3200);} }
+
+  // hoop drift
+  const t=performance.now()*0.001;
+  rig.position.x=Math.sin(t*0.5)*2.2;
+  rig.position.z=-6+Math.sin(t*0.3)*0.8;
+
+  // held balls track hands + compute velocity
+  for(const side of ['left','right']){
+    const grip=side==='left'?gripL:gripR;
+    const wp=new THREE.Vector3(); grip.getWorldPosition(wp);
+    handVel[side].copy(wp).sub(prevPos[side]).divideScalar(Math.max(dt,0.001));
+    prevPos[side].copy(wp);
+    if(held[side]) held[side].position.copy(wp);
+  }
+
+  const rw=rimWorld();
+  for(let i=S.balls.length-1;i>=0;i--){const b=S.balls[i];
+    const prevY=b.mesh.position.y;
+    b.vel.y-=GRAV*dt; b.mesh.position.add(b.vel.clone().multiplyScalar(dt)); b.life-=dt;
+    b.mesh.rotation.x+=dt*4;
+    // rim collision (simple): if near rim torus ring height and outside hole, bounce
+    const dx=b.mesh.position.x-rw.x, dz=b.mesh.position.z-rw.z; const rd=Math.hypot(dx,dz);
+    if(Math.abs(b.mesh.position.y-rw.y)<0.12 && rd>RIM_R-0.04 && rd<RIM_R+0.12 && !b.scored){
+      b.vel.x+=dx*3; b.vel.z+=dz*3; b.vel.y*=0.5; b.bouncedRim=true; if(Math.random()<0.5)sfx.bounce();
+    }
+    // scoring: passing downward through rim plane within radius
+    if(!b.scored && prevY>rw.y && b.mesh.position.y<=rw.y && rd<RIM_R-0.03 && b.vel.y<0){
+      b.scored=true; const swish=!b.bouncedRim; const pts=swish?3:2; S.score+=pts;
+      window.cheer && window.cheer(swish?'big':'great');
+      burst(rw.clone(),COL.yellow); if(swish){sfx.swish();showMsg('SWISH! +3','#3bffa1',1.1);} else {sfx.score();showMsg('SCORE! +2','#ffd23b',1.0);}
+      S.clock=Math.min(30,S.clock+3);
+    }
+    // floor bounce
+    if(b.mesh.position.y<0.12){ b.mesh.position.y=0.12; b.vel.y*=-0.5; b.vel.x*=0.7; b.vel.z*=0.7; if(Math.abs(b.vel.y)>0.5)sfx.bounce(); }
+    if(b.life<=0 || (Math.abs(b.vel.y)<0.4 && b.mesh.position.y<=0.13 && b.vel.length()<0.6)){ scene.remove(b.mesh); S.balls.splice(i,1); }
+  }
+  for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.vel.y-=5*dt;p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.life-=dt;p.mesh.scale.setScalar(Math.max(.01,p.life/.6));if(p.life<=0){scene.remove(p.mesh);S.particles.splice(i,1);}}
+}
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+
+const overlay=document.getElementById('overlay');
+document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});
+const _titleMusic=()=>{ initAudio(); music&&music.ensure('hoops'); };
+addEventListener('pointerdown', _titleMusic); addEventListener('keydown', _titleMusic);
+renderer.xr.addEventListener('sessionstart',()=>{overlay.classList.add('hidden');if(!S.running)startGame();});
+drawHUD();
+</script>
+</body>
+</html>

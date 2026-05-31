@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>BEAT DRUMMER — WebXR</title>
+<style>
+  :root{ --red:#ff3b3b; --blue:#2d6cff; --yellow:#ffd23b; --purple:#b06bff; --ink:#0b0e1a; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff;}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 30%,#2a1340 0%,#0b0e1a 70%);text-align:center;padding:24px;z-index:10;transition:opacity .4s;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  h1{font-size:clamp(36px,8.5vw,80px);letter-spacing:4px;line-height:.95;color:var(--purple);
+    text-shadow:0 4px 0 var(--red),0 8px 18px rgba(0,0,0,.6);margin-bottom:6px;font-weight:900;}
+  .sub{color:#d8baff;letter-spacing:3px;font-size:14px;margin-bottom:28px;text-transform:uppercase;}
+  .card{background:rgba(13,18,40,.7);border:2px solid var(--purple);border-radius:14px;padding:20px 26px;max-width:520px;}
+  .card p{color:#ecdcff;line-height:1.6;font-size:15px;margin:8px 0;} .card b{color:var(--yellow);}
+  .btn{margin-top:22px;cursor:pointer;border:none;border-radius:12px;padding:16px 38px;font-size:19px;font-weight:900;
+    letter-spacing:2px;color:#fff;background:linear-gradient(180deg,#c79bff,#b06bff);box-shadow:0 6px 0 #6f3ab0;text-transform:uppercase;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #6f3ab0;}
+  #hint{margin-top:14px;font-size:12px;color:#8a6faf;letter-spacing:1px;}
+  #vrbtn-slot{margin-top:14px;}
+  #vrbtn-slot button{background:var(--red)!important;color:#fff!important;border:2px solid #ff8f8f!important;border-radius:10px!important;font-weight:900!important;}
+  #backlink{position:fixed;top:16px;left:16px;z-index:20;color:#d8baff;text-decoration:none;font-weight:900;letter-spacing:2px;
+    font-size:14px;background:rgba(13,18,40,.7);border:2px solid var(--purple);border-radius:10px;padding:8px 14px;}
+  #backlink:hover{color:var(--yellow);border-color:var(--yellow);}
+  #muteBtn{position:fixed;top:16px;right:16px;z-index:20;color:#d8baff;cursor:pointer;font-weight:900;letter-spacing:1px;
+    font-size:14px;background:rgba(13,18,40,.7);border:2px solid var(--purple);border-radius:10px;padding:8px 14px;user-select:none;}
+  #muteBtn:hover{color:var(--yellow);border-color:var(--yellow);}
+</style>
+</head>
+<body>
+  <a id="backlink" href="index.html">◄ ARCADE</a>
+  <div id="muteBtn">🔊 MUSIC</div>
+  <div id="overlay">
+    <h1>BEAT<br>DRUMMER</h1>
+    <div class="sub">◆ WebXR Rhythm Pads ◆</div>
+    <div class="card">
+      <p><b>IN VR:</b> A drumstick in each hand. The glowing notes <b>are the melody</b> — strike the <b style="color:#ff8f8f">red</b> or <b style="color:#7aa3ff">blue</b> pad the instant a note lands, in time with the music.</p>
+      <p><b>ON DESKTOP:</b> Press <b>F</b> for the red pad and <b>J</b> for the blue pad (or click left / right) on the beat.</p>
+      <p>The chiptune track keeps the tempo. Nail the timing for PERFECT hits and chain your combo!</p>
+    </div>
+    <button class="btn" id="startBtn">▶ START</button>
+    <div id="vrbtn-slot"></div>
+    <div id="hint">Press M to mute the music. Notes always land on the beat.</div>
+  </div>
+
+<script src="chiptune.js"></script>
+<script type="importmap">
+{ "imports": { "three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+const COL={ red:0xff3b3b, blue:0x2d6cff, yellow:0xffd23b, purple:0xb06bff, white:0xf3f6ff };
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0b0e1a); scene.fog=new THREE.Fog(0x0b0e1a,14,40);
+const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.05,200); camera.position.set(0,1.6,0);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+document.getElementById('vrbtn-slot').appendChild(VRButton.createButton(renderer));
+
+scene.add(new THREE.HemisphereLight(0xc0aaff,0x202040,1.2));
+const key=new THREE.DirectionalLight(0xffffff,1.1); key.position.set(2,8,4); scene.add(key);
+const grid=new THREE.GridHelper(40,40,COL.purple,0x2a1840); grid.material.opacity=.4; grid.material.transparent=true; scene.add(grid);
+
+// pads + tracks
+const PADZ=-0.7, PADY=1.15, SPAWNZ=-12.7, LEAD=2.0; // seconds for a note to travel
+const lanes=[ {x:-0.55,color:COL.red}, {x:0.55,color:COL.blue} ];
+lanes.forEach((ln)=>{
+  const pad=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.34,0.12,24),new THREE.MeshStandardMaterial({color:ln.color,emissive:ln.color,emissiveIntensity:.3,roughness:.4}));
+  pad.position.set(ln.x,PADY,PADZ); scene.add(pad); ln.pad=pad; ln.flash=0;
+  const track=new THREE.Mesh(new THREE.PlaneGeometry(0.66,12),new THREE.MeshBasicMaterial({color:ln.color,transparent:true,opacity:.1}));
+  track.rotation.x=-Math.PI/2.0; track.position.set(ln.x,PADY-0.06,PADZ-6); scene.add(track);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.32,0.02,8,28),new THREE.MeshBasicMaterial({color:COL.white}));
+  ring.rotation.x=Math.PI/2; ring.position.set(ln.x,PADY+0.07,PADZ); scene.add(ring);
+});
+
+// HUD
+const hudCanvas=document.createElement('canvas'); hudCanvas.width=1024; hudCanvas.height=256;
+const hctx=hudCanvas.getContext('2d'); const hudTex=new THREE.CanvasTexture(hudCanvas);
+const hud=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.6),new THREE.MeshBasicMaterial({map:hudTex,transparent:true}));
+hud.position.set(0,2.6,-5); scene.add(hud);
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function drawHUD(){
+  hctx.clearRect(0,0,1024,256); hctx.fillStyle='rgba(13,18,40,.85)'; rr(hctx,8,8,1008,240,24);hctx.fill();
+  hctx.lineWidth=6;hctx.strokeStyle='#b06bff';rr(hctx,8,8,1008,240,24);hctx.stroke(); hctx.textBaseline='middle';
+  hctx.textAlign='left';hctx.fillStyle='#ffd23b';hctx.font='900 54px Trebuchet MS';hctx.fillText('SCORE',40,62);
+  hctx.fillStyle='#fff';hctx.font='900 88px Trebuchet MS';hctx.fillText(String(S.score).padStart(6,'0'),40,162);
+  hctx.textAlign='right';hctx.fillStyle=S.combo>1?'#ffd23b':'#6f7dad';hctx.font='900 60px Trebuchet MS';hctx.fillText('x'+S.combo,984,62);
+  hctx.fillStyle='#b06bff';hctx.font='900 40px Trebuchet MS';hctx.fillText(S.acc+'%',984,135);
+  hctx.textAlign='left';hctx.fillStyle='#9fb0ff';hctx.font='700 28px Trebuchet MS';hctx.fillText('COMBO',40,205);
+  hudTex.needsUpdate=true;
+}
+const msgCanvas=document.createElement('canvas'); msgCanvas.width=1024; msgCanvas.height=256;
+const mctx=msgCanvas.getContext('2d'); const msgTex=new THREE.CanvasTexture(msgCanvas);
+const msgPlane=new THREE.Mesh(new THREE.PlaneGeometry(2.6,0.65),new THREE.MeshBasicMaterial({map:msgTex,transparent:true}));
+msgPlane.position.set(0,1.85,-4); msgPlane.visible=false; scene.add(msgPlane); let msgT=0;
+function showMsg(t,c='#ffd23b',d=0.8){mctx.clearRect(0,0,1024,256);mctx.textAlign='center';mctx.textBaseline='middle';
+  mctx.fillStyle=c;mctx.font='900 90px Trebuchet MS';mctx.shadowColor='rgba(0,0,0,.6)';mctx.shadowBlur=16;
+  mctx.fillText(t,512,128);msgTex.needsUpdate=true;msgPlane.visible=true;msgT=d;}
+
+/* ===================== 8-BIT MUSIC ENGINE ===================== */
+let actx=null, master=null, noiseBuf=null, muted=false, menuMusic=null;
+function initAudio(){
+  if(!actx){ try{ actx=new(window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+    master=actx.createGain(); master.gain.value=muted?0:0.5; master.connect(actx.destination);
+    // noise buffer for drums
+    noiseBuf=actx.createBuffer(1, actx.sampleRate*0.3, actx.sampleRate);
+    const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  if(actx.state==='suspended') actx.resume();
+}
+// scheduled-time instruments
+function tone(t,freq,dur,type,vol,sl){ if(!actx)return; const o=actx.createOscillator(),g=actx.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t); if(sl)o.frequency.exponentialRampToValueAtTime(sl,t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.02); }
+function noiseHit(t,hp,dur,vol){ if(!actx)return; const s=actx.createBufferSource(); s.buffer=noiseBuf;
+  const f=actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=hp;
+  const g=actx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+dur+0.02); }
+function kickAt(t){ if(!actx)return; const o=actx.createOscillator(),g=actx.createGain(); o.type='sine';
+  o.frequency.setValueAtTime(155,t); o.frequency.exponentialRampToValueAtTime(48,t+0.12);
+  g.gain.setValueAtTime(0.5,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.18); }
+function snareAt(t){ noiseHit(t,1400,0.18,0.32); tone(t,220,0.06,'triangle',0.12); }
+function hatAt(t,v){ noiseHit(t,8000,0.05,v); }
+function bassAt(t,f){ tone(t,f,stepDur*0.95,'triangle',0.22); }
+function leadAt(t,f,v,type='square'){ tone(t,f,0.22,type,v,f); }
+
+// musical material
+const BPM=112, beatDur=60/BPM, stepDur=beatDur/2; // eighth-note steps
+const ROOT=220; // A3
+const SCALE=[0,2,4,7,9,12]; // major pentatonic degrees (semitones)
+function midi(semi){ return ROOT*Math.pow(2,semi/12); }
+const barRoots=[0,5,3,7]; // bass root per bar (semitone offset)
+// 16-step (2-bar) melody: scale-degree index, -1 = rest
+const MELODY=[0,2,4,2, 5,4,2,-1, 3,4,5,3, 4,2,0,-1];
+const KICK = [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0];
+const SNARE= [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+
+let musicStart=0, schedStep=0, genStep=0, genCount=0;
+function audioNow(){ return actx? actx.currentTime : performance.now()/1000; }
+function stepTime(n){ return musicStart + n*stepDur; }
+
+function scheduleStep(step, t){
+  const s=((step%16)+16)%16;
+  if(KICK[s]) kickAt(t);
+  if(SNARE[s]) snareAt(t);
+  hatAt(t, (step%2)?0.05:0.03);
+  if(step%2===0){ const bar=Math.floor(step/4)%4; bassAt(t, midi(barRoots[bar]-12)); }
+  const deg=MELODY[s];
+  if(deg>=0) leadAt(t, midi(SCALE[deg]+12), 0.085); // melody (the falling notes you hear)
+}
+
+function noteForStep(step){ const s=((step%16)+16)%16; const deg=MELODY[s]; if(deg<0) return null;
+  return { freq: midi(SCALE[deg]+12) }; }
+
+function spawnNote(step, tHit, laneIdx, freq){
+  const ln=lanes[laneIdx];
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.26,0.08,20),new THREE.MeshStandardMaterial({color:ln.color,emissive:ln.color,emissiveIntensity:.4}));
+  m.position.set(ln.x,PADY,SPAWNZ);
+  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.CylinderGeometry(0.27,0.27,0.085,20)),new THREE.LineBasicMaterial({color:COL.white}));
+  m.add(edge); scene.add(m);
+  S.notes.push({mesh:m,lane:laneIdx,tHit,freq,done:false,judged:false}); S.total++;
+}
+
+// run scheduler each frame
+function runScheduler(){
+  if(!actx || !S.running) return;
+  const now=actx.currentTime;
+  // backing music: short lookahead
+  while(stepTime(schedStep) < now + 0.15){ scheduleStep(schedStep, stepTime(schedStep)); schedStep++; }
+  // gameplay notes: generated LEAD seconds before they land
+  while(stepTime(genStep) - LEAD < now){
+    const nf=noteForStep(genStep);
+    if(nf){ const lane=(genCount++)%2; spawnNote(genStep, stepTime(genStep), lane, nf.freq); }
+    genStep++;
+  }
+}
+
+/* ===================== GAMEPLAY ===================== */
+const S={ score:0, combo:0, running:false, notes:[], particles:[], hits:0, total:0, acc:100 };
+
+function makeStick(color){const g=new THREE.Group();
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.016,0.34,10),new THREE.MeshStandardMaterial({color:0xd9c4a0,roughness:.6}));
+  shaft.position.y=0.17; const tip=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.5}));
+  tip.position.y=0.35; g.add(shaft,tip); g.userData.tipLocal=new THREE.Vector3(0,0.35,0); return g;}
+const gripL=renderer.xr.getControllerGrip(0), gripR=renderer.xr.getControllerGrip(1);
+scene.add(gripL,gripR);
+const stickL=makeStick(COL.red), stickR=makeStick(COL.blue);
+gripL.add(stickL); gripR.add(stickR);
+const stickIn=[false,false];
+
+function burst(pos,color){for(let i=0;i<12;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05),new THREE.MeshBasicMaterial({color}));
+  p.position.copy(pos);const v=new THREE.Vector3((Math.random()-.5),(Math.random()),(Math.random()-.5)).multiplyScalar(3);
+  scene.add(p);S.particles.push({mesh:p,vel:v,life:.5});}}
+
+function tryHit(laneIdx){
+  lanes[laneIdx].flash=0.18;
+  const now=audioNow();
+  let best=null,bd=1e9;
+  for(const n of S.notes){ if(n.done||n.judged||n.lane!==laneIdx) continue;
+    const dt=Math.abs(now-n.tHit); if(dt<0.22 && dt<bd){bd=dt;best=n;} }
+  if(best){
+    best.judged=true; best.done=true;
+    const perfect=bd<0.075; const pts=perfect?100:50; const mult=1+Math.floor(S.combo/8)*0.5;
+    S.score+=Math.round(pts*mult); S.combo++; S.hits++;
+    window.cheer && window.cheer(perfect?'big':'hit');
+    burst(best.mesh.position.clone(),lanes[laneIdx].color); scene.remove(best.mesh);
+    if(actx){ leadAt(actx.currentTime, best.freq*2, 0.18); } // bright confirm an octave up
+    if(perfect){showMsg('PERFECT','#ffd23b',.7);} else {showMsg('GOOD','#b06bff',.6);}
+    S.acc=S.total?Math.round(100*S.hits/S.total):100;
+  }
+}
+
+// desktop input
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();
+  if(k==='f'){initAudio();tryHit(0);} if(k==='j'){initAudio();tryHit(1);}
+  if(k==='m'){ toggleMute(); }});
+addEventListener('mousedown',e=>{ if(renderer.xr.isPresenting)return; initAudio(); tryHit(e.clientX<innerWidth/2?0:1); });
+
+function toggleMute(){ muted=!muted; if(master)master.gain.value=muted?0:0.5; if(menuMusic)menuMusic.setMute(muted);
+  document.getElementById('muteBtn').textContent=muted?'🔇 MUSIC':'🔊 MUSIC'; }
+document.getElementById('muteBtn').addEventListener('click',()=>{initAudio();toggleMute();});
+
+function startGame(){ menuMusic&&menuMusic.stop(); S.score=0;S.combo=0;S.running=true; S.notes.forEach(n=>scene.remove(n.mesh));S.notes=[];
+  S.hits=0;S.total=0;S.acc=100;
+  // (re)start the music clock — lead-in of LEAD so the first notes get a full travel time
+  musicStart=audioNow()+LEAD+0.4; schedStep=0; genStep=0; genCount=0;
+  showMsg('GROOVE!','#b06bff',1.2); }
+
+const clock=new THREE.Clock();
+function update(dt){
+  drawHUD(); if(msgT>0){msgT-=dt;if(msgT<=0)msgPlane.visible=false;}
+  runScheduler();
+
+  // pad pulse to the beat + flash on hit
+  const now=audioNow();
+  const beatPhase = (actx&&S.running) ? (((now-musicStart)/beatDur)%1+1)%1 : 0;
+  const pulse = 0.3 + Math.max(0,1-beatPhase*4)*0.5;
+  lanes.forEach(ln=>{ if(ln.flash>0){ln.flash-=dt; ln.pad.material.emissiveIntensity=.3+Math.max(0,ln.flash)*5; ln.pad.position.y=PADY-Math.max(0,ln.flash)*0.3;}
+    else {ln.pad.material.emissiveIntensity=pulse; ln.pad.position.y=PADY;} });
+  grid.material.opacity=0.3+Math.max(0,1-beatPhase*4)*0.25;
+
+  // VR stick strikes
+  if(renderer.xr.isPresenting){
+    [stickL,stickR].forEach((st,si)=>{ const w=st.localToWorld(st.userData.tipLocal.clone());
+      let near=-1; lanes.forEach((ln,li)=>{ if(w.distanceTo(ln.pad.position)<0.36) near=li; });
+      if(near>=0 && !stickIn[si]){ stickIn[si]=true; tryHit(near); }
+      else if(near<0) stickIn[si]=false; });
+  }
+
+  // notes: position via time interpolation (synced to music)
+  for(let i=S.notes.length-1;i>=0;i--){const n=S.notes[i]; if(n.done){scene.remove(n.mesh);S.notes.splice(i,1);continue;}
+    const u=(now-(n.tHit-LEAD))/LEAD; // 0 at spawn, 1 at pad
+    n.mesh.position.z=SPAWNZ+(PADZ-SPAWNZ)*u;
+    if(!n.judged && now>n.tHit+0.22){ // missed
+      n.judged=true; n.done=true; if(S.running){ S.combo=0; showMsg('MISS','#ff3b3b',.6);
+        S.acc=S.total?Math.round(100*S.hits/S.total):100; }
+    }
+  }
+  for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.vel.y-=5*dt;p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.life-=dt;p.mesh.scale.setScalar(Math.max(.01,p.life/.5));if(p.life<=0){scene.remove(p.mesh);S.particles.splice(i,1);}}
+}
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+
+const overlay=document.getElementById('overlay');
+document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});
+renderer.xr.addEventListener('sessionstart',()=>{overlay.classList.add('hidden');initAudio();if(!S.running)startGame();});
+// title-screen menu music (chiptune); stops when the song starts
+const _titleMusic=()=>{ initAudio(); if(actx&&!menuMusic){ menuMusic=makeChiptune(actx,{button:false}); menuMusic.setMute(muted); } if(menuMusic&&!S.running) menuMusic.ensure('menu'); };
+addEventListener('pointerdown',_titleMusic); addEventListener('keydown',_titleMusic);
+drawHUD();
+</script>
+</body>
+</html>

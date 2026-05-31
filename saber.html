@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>SABER SLASH — WebXR</title>
+<style>
+  :root{ --red:#ff3b3b; --blue:#2d6cff; --yellow:#ffd23b; --ink:#0b0e1a; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff;}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 30%,#2a1340 0%,#0b0e1a 70%);text-align:center;padding:24px;z-index:10;transition:opacity .4s;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  h1{font-size:clamp(38px,9vw,84px);letter-spacing:4px;line-height:.95;color:var(--blue);
+    text-shadow:0 4px 0 var(--red),0 8px 18px rgba(0,0,0,.6);margin-bottom:6px;font-weight:900;}
+  .sub{color:#c5a3ff;letter-spacing:3px;font-size:14px;margin-bottom:28px;text-transform:uppercase;}
+  .card{background:rgba(13,18,40,.7);border:2px solid var(--blue);border-radius:14px;padding:20px 26px;max-width:520px;}
+  .card p{color:#cdd6ff;line-height:1.6;font-size:15px;margin:8px 0;}
+  .card b{color:var(--yellow);}
+  .btn{margin-top:22px;cursor:pointer;border:none;border-radius:12px;padding:16px 38px;font-size:19px;font-weight:900;
+    letter-spacing:2px;color:#0b0e1a;background:linear-gradient(180deg,#7aa3ff,#2d6cff);box-shadow:0 6px 0 #163a8f;text-transform:uppercase;color:#fff;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #163a8f;}
+  #hint{margin-top:14px;font-size:12px;color:#7d6faf;letter-spacing:1px;}
+  #vrbtn-slot{margin-top:14px;}
+  #vrbtn-slot button{background:var(--red)!important;color:#fff!important;border:2px solid #ff8f8f!important;border-radius:10px!important;font-weight:900!important;}
+  #backlink{position:fixed;top:16px;left:16px;z-index:20;color:#c5a3ff;text-decoration:none;font-weight:900;letter-spacing:2px;
+    font-size:14px;background:rgba(13,18,40,.7);border:2px solid var(--blue);border-radius:10px;padding:8px 14px;}
+  #backlink:hover{color:var(--yellow);border-color:var(--yellow);}
+</style>
+</head>
+<body>
+  <a id="backlink" href="index.html">◄ ARCADE</a>
+  <div id="overlay">
+    <h1>SABER<br>SLASH</h1>
+    <div class="sub">◆ WebXR Rhythm Blades ◆</div>
+    <div class="card">
+      <p><b>IN VR:</b> A <b style="color:#ff8f8f">red</b> blade in your left hand, a <b style="color:#7aa3ff">blue</b> blade in your right. Slice each block with the <b>matching</b> color.</p>
+      <p><b>ON DESKTOP:</b> Move the mouse to swing. <b>Hold LEFT</b> for the red blade, <b>hold RIGHT</b> for blue, and pass over matching blocks.</p>
+      <p>Match the color, keep the combo alive, don't let blocks slip past!</p>
+    </div>
+    <button class="btn" id="startBtn">▶ START</button>
+    <div id="vrbtn-slot"></div>
+    <div id="hint">Headset: tap "Enter VR". Right-click is the blue blade on desktop.</div>
+  </div>
+
+<script src="chiptune.js"></script>
+<script type="importmap">
+{ "imports": { "three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+const COL={ red:0xff3b3b, blue:0x2d6cff, yellow:0xffd23b, white:0xf3f6ff };
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0b0e1a); scene.fog=new THREE.Fog(0x0b0e1a,12,40);
+const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.05,200); camera.position.set(0,1.6,0);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight); renderer.xr.enabled=true; renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+document.getElementById('vrbtn-slot').appendChild(VRButton.createButton(renderer));
+
+scene.add(new THREE.HemisphereLight(0xaab6ff,0x202040,1.2));
+const key=new THREE.DirectionalLight(0xffffff,1.1); key.position.set(3,8,4); scene.add(key);
+
+// arena
+const grid=new THREE.GridHelper(60,60,COL.blue,0x223066); grid.material.opacity=.5; grid.material.transparent=true; scene.add(grid);
+// side neon rails
+for(const s of [-1,1]){
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,40),new THREE.MeshBasicMaterial({color:s<0?COL.red:COL.blue}));
+  rail.position.set(s*2.2,0.05,-18); scene.add(rail);
+}
+
+// HUD
+const hudCanvas=document.createElement('canvas'); hudCanvas.width=1024; hudCanvas.height=256;
+const hctx=hudCanvas.getContext('2d'); const hudTex=new THREE.CanvasTexture(hudCanvas);
+const hud=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.6),new THREE.MeshBasicMaterial({map:hudTex,transparent:true}));
+hud.position.set(0,3.0,-7); scene.add(hud);
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function drawHUD(){
+  hctx.clearRect(0,0,1024,256); hctx.fillStyle='rgba(13,18,40,.85)'; rr(hctx,8,8,1008,240,24); hctx.fill();
+  hctx.lineWidth=6; hctx.strokeStyle='#2d6cff'; rr(hctx,8,8,1008,240,24); hctx.stroke(); hctx.textBaseline='middle';
+  hctx.fillStyle='#ffd23b'; hctx.font='900 56px Trebuchet MS'; hctx.textAlign='left'; hctx.fillText('SCORE',40,64);
+  hctx.fillStyle='#fff'; hctx.font='900 92px Trebuchet MS'; hctx.fillText(String(S.score).padStart(5,'0'),40,168);
+  hctx.textAlign='right';
+  hctx.fillStyle=S.combo>1?'#ffd23b':'#6f7dad'; hctx.font='900 64px Trebuchet MS'; hctx.fillText('x'+S.combo,984,70);
+  hctx.fillStyle='#9fb0ff'; hctx.font='700 34px Trebuchet MS'; hctx.fillText('COMBO',984,140);
+  hctx.fillStyle='#223066'; rr(hctx,624,186,360,26,12); hctx.fill();
+  hctx.fillStyle='#ff3b3b'; const f=S.lives/5; rr(hctx,624,186,360*Math.max(0,f),26,12); hctx.fill();
+  hctx.textAlign='left'; hctx.fillStyle='#9fb0ff'; hctx.font='700 28px Trebuchet MS'; hctx.fillText('LIVES',40,206);
+  hudTex.needsUpdate=true;
+}
+const msgCanvas=document.createElement('canvas'); msgCanvas.width=1024; msgCanvas.height=256;
+const mctx=msgCanvas.getContext('2d'); const msgTex=new THREE.CanvasTexture(msgCanvas);
+const msgPlane=new THREE.Mesh(new THREE.PlaneGeometry(3.2,0.8),new THREE.MeshBasicMaterial({map:msgTex,transparent:true}));
+msgPlane.position.set(0,1.9,-6); msgPlane.visible=false; scene.add(msgPlane); let msgT=0;
+function showMsg(t,c='#ffd23b',d=1.5){mctx.clearRect(0,0,1024,256);mctx.textAlign='center';mctx.textBaseline='middle';
+  mctx.fillStyle=c;mctx.font='900 110px Trebuchet MS';mctx.shadowColor='rgba(0,0,0,.6)';mctx.shadowBlur=18;mctx.shadowOffsetY=5;
+  mctx.fillText(t,512,128);msgTex.needsUpdate=true;msgPlane.visible=true;msgT=d;}
+
+// audio
+let music=null; let actx=null; function initAudio(){if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}if(actx&&actx.state==='suspended')actx.resume(); if(actx&&!music){music=makeChiptune(actx);}}
+function blip(f,d=.12,t='square',v=.16,sl=null){if(!actx)return;const o=actx.createOscillator(),g=actx.createGain();o.type=t;
+  o.frequency.setValueAtTime(f,actx.currentTime); if(sl)o.frequency.exponentialRampToValueAtTime(sl,actx.currentTime+d);
+  g.gain.setValueAtTime(v,actx.currentTime); g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d);
+  o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+d);}
+const sfx={ slice:()=>{blip(660,.08,'square',.18,1320);blip(330,.12,'triangle',.1);}, bad:()=>blip(120,.22,'sawtooth',.16,70),
+  miss:()=>blip(160,.18,'sawtooth',.12,90), start:()=>{[392,523,659,784].forEach((f,i)=>setTimeout(()=>blip(f,.14,'square',.16),i*80));} };
+
+const S={ score:0, combo:0, lives:5, running:false, blocks:[], particles:[], spawnT:0, spawnInt:1.1, speed:5, t:0 };
+
+// sabers on controllers
+function makeSaber(color){
+  const g=new THREE.Group();
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.12,10),new THREE.MeshStandardMaterial({color:0x222233,metalness:.6,roughness:.4}));
+  const blade=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.9,12),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.9}));
+  blade.position.y=0.5; g.add(handle,blade);
+  g.userData.tipLocal=new THREE.Vector3(0,0.95,0);
+  return g;
+}
+const gripL=renderer.xr.getControllerGrip(0), gripR=renderer.xr.getControllerGrip(1);
+scene.add(gripL,gripR);
+const saberL=makeSaber(COL.red), saberR=makeSaber(COL.blue);
+saberL.rotation.x=-0.3; saberR.rotation.x=-0.3;
+gripL.add(saberL); gripR.add(saberR);
+
+// blocks
+function spawnBlock(){
+  const isRed=Math.random()<0.5;
+  const color=isRed?COL.red:COL.blue;
+  const m=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.45,0.45),
+    new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.25,roughness:.4}));
+  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:COL.white}));
+  m.add(edge);
+  const lane=(Math.random()*2-1);
+  m.position.set(lane*1.5, 1.2+Math.random()*1.0, -22);
+  m.userData={isRed,color,radius:0.42};
+  scene.add(m); S.blocks.push(m);
+}
+function burst(pos,color){
+  for(let i=0;i<12;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.06),new THREE.MeshBasicMaterial({color}));
+    p.position.copy(pos);const v=new THREE.Vector3((Math.random()-.5),(Math.random()-.5),(Math.random()-.5)).multiplyScalar(3.5);
+    scene.add(p);S.particles.push({mesh:p,vel:v,life:.6});}
+}
+
+// desktop saber
+const ray=new THREE.Raycaster(); const aim=new THREE.Vector2(0,0);
+let mouseRed=false, mouseBlue=false;
+addEventListener('mousemove',e=>{aim.x=(e.clientX/innerWidth)*2-1;aim.y=-(e.clientY/innerHeight)*2+1;});
+addEventListener('mousedown',e=>{initAudio(); if(e.button===0)mouseRed=true; if(e.button===2)mouseBlue=true;});
+addEventListener('mouseup',e=>{if(e.button===0)mouseRed=false; if(e.button===2)mouseBlue=false;});
+addEventListener('contextmenu',e=>e.preventDefault());
+
+function activeTips(){
+  const tips=[];
+  if(renderer.xr.isPresenting){
+    [ [saberL,true],[saberR,false] ].forEach(([s,isRed])=>{
+      const w=s.localToWorld(s.userData.tipLocal.clone()); tips.push({pos:w,isRed});
+    });
+  } else {
+    if(mouseRed||mouseBlue){
+      ray.setFromCamera(aim,camera);
+      const pt=ray.ray.origin.clone().add(ray.ray.direction.clone().multiplyScalar(8)); // around block plane
+      if(mouseRed) tips.push({pos:pt.clone(),isRed:true});
+      if(mouseBlue) tips.push({pos:pt.clone(),isRed:false});
+    }
+  }
+  return tips;
+}
+
+function startGame(){ initAudio(); music&&music.ensure('saber'); S.score=0;S.combo=0;S.lives=5;S.running=true;S.speed=5;S.spawnInt=1.1;S.t=0;
+  S.blocks.forEach(b=>scene.remove(b));S.blocks=[]; sfx.start(); showMsg('SLASH!','#2d6cff',1.2); }
+
+const clock=new THREE.Clock();
+function update(dt){
+  drawHUD(); if(msgT>0){msgT-=dt;if(msgT<=0)msgPlane.visible=false;}
+  if(S.running){
+    S.t+=dt; S.speed=5+S.t*0.12; S.spawnInt=Math.max(0.45,1.1-S.t*0.01);
+    S.spawnT-=dt; if(S.spawnT<=0){spawnBlock();S.spawnT=S.spawnInt;}
+  }
+  const tips=activeTips();
+  for(let i=S.blocks.length-1;i>=0;i--){
+    const b=S.blocks[i]; b.position.z+=S.speed*dt; b.rotation.x+=dt*1.2; b.rotation.y+=dt*0.8;
+    let sliced=false;
+    for(const tip of tips){
+      if(b.position.distanceTo(tip.pos)<b.userData.radius+0.18){
+        if(tip.isRed===b.userData.isRed){ // correct color
+          S.combo++; const mult=1+Math.floor(S.combo/5)*0.5; S.score+=Math.round(10*mult);
+          window.cheer && window.cheer(S.combo%10===0?'big':(S.combo>=6?'great':'hit'));
+          burst(b.position.clone(),b.userData.color); sfx.slice();
+          if(S.combo>0&&S.combo%10===0) showMsg('x'+S.combo+' COMBO!','#ffd23b',1);
+        } else { // wrong color
+          S.combo=0; S.lives--; sfx.bad(); burst(b.position.clone(),COL.white); showMsg('WRONG!','#ff3b3b',.8);
+        }
+        sliced=true; break;
+      }
+    }
+    if(sliced){ scene.remove(b); S.blocks.splice(i,1); continue; }
+    if(b.position.z>1.2){ // passed player
+      scene.remove(b); S.blocks.splice(i,1);
+      if(S.running){ S.combo=0; S.lives--; sfx.miss(); }
+    }
+  }
+  for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.vel.y-=5*dt;p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.life-=dt;p.mesh.scale.setScalar(Math.max(.01,p.life/.6));if(p.life<=0){scene.remove(p.mesh);S.particles.splice(i,1);}}
+  if(S.running&&S.lives<=0){ S.running=false; showMsg('GAME OVER','#ff3b3b',3); setTimeout(()=>{if(!S.running)startGame();},3200); }
+}
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),0.05);update(dt);renderer.render(scene,camera);});
+
+const overlay=document.getElementById('overlay');
+document.getElementById('startBtn').addEventListener('click',()=>{initAudio();overlay.classList.add('hidden');startGame();});
+const _titleMusic=()=>{ initAudio(); music&&music.ensure('saber'); };
+addEventListener('pointerdown', _titleMusic); addEventListener('keydown', _titleMusic);
+renderer.xr.addEventListener('sessionstart',()=>{overlay.classList.add('hidden');if(!S.running)startGame();});
+drawHUD();
+</script>
+</body>
+</html>

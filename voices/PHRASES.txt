@@ -1,0 +1,38 @@
+VOICEVOX → game voice-over: what to generate
+=============================================
+
+VOICEVOX only speaks Japanese, which is great for the hyped announcer vibe.
+Pick one energetic character voice, turn the SPEED and PITCH sliders UP a bit
+for extra hype, type each phrase, then export ("音声書き出し" / the export icon).
+
+Save the exported .wav files into THIS folder, named by category + a number.
+You can make as many as you like per category; the game picks one at random.
+
+------------------------------------------------------------------
+hit*  — minor hits (said often, keep them short)
+------------------------------------------------------------------
+  hit1.wav  ->  ナイス！        (naisu — "Nice!")
+  hit2.wav  ->  よし！          (yoshi — "Alright!")
+  hit3.wav  ->  きたー！        (kitaa — "Yes!/Here we go!")
+
+------------------------------------------------------------------
+great* — good shots / kills
+------------------------------------------------------------------
+  great1.wav ->  すごい！        (sugoi — "Amazing!")
+  great2.wav ->  最高！          (saikou — "The best!")
+  great3.wav ->  ナイスショット！ (naisu shotto — "Nice shot!")
+
+------------------------------------------------------------------
+big*  — bullseyes / combos / big moments (go all-out hyped)
+------------------------------------------------------------------
+  big1.wav  ->  やったー！      (yattaa — "You did it!")
+  big2.wav  ->  完璧だ！        (kanpeki da — "Perfect!")
+  big3.wav  ->  ゴーール！      (gooru — "Goooal!")
+  big4.wav  ->  神ってる！      (kamitteru — "Godlike!")
+
+------------------------------------------------------------------
+Then, from the quest-webxr folder, run:
+    python build_voices.py
+It bakes these .wav files into voices.js (handles .wav automatically — no
+conversion needed). Reload the games and the announcer uses YOUR clips.
+------------------------------------------------------------------
